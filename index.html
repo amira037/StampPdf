@@ -1,0 +1,2065 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 도장 삽입기</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #eef1f3;
+  --surface: #ffffff;
+  --surface-2: #f7f8f9;
+  --border: #d8dde2;
+  --border-strong: #aeb8c2;
+  --text: #15191d;
+  --muted: #69727d;
+  --accent: #c8372b;
+  --accent-soft: #fff0ee;
+  --focus: #2878d8;
+  --stamp: #2d7b56;
+  --radius: 8px;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+header {
+  flex-shrink: 0;
+  height: 52px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+header h1 { font-size: 15px; font-weight: 700; }
+header .sub { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(320px, 1fr) 176px;
+}
+
+.sidebar,
+.thumb-panel {
+  background: var(--surface);
+  overflow: auto;
+  padding: 14px;
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.thumb-panel {
+  border-left: 1px solid var(--border);
+}
+
+.sec-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+
+.drop-zone {
+  position: relative;
+  min-height: 78px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--surface-2);
+  transition: border-color 0.16s, background 0.16s, color 0.16s;
+  line-height: 1.5;
+}
+
+.drop-zone input[type=file] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over,
+body.dragging-file .drop-zone {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.drop-zone.filled {
+  border-style: solid;
+  background: #fbfbfc;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.dz-icon { font-size: 20px; margin-bottom: 3px; }
+.dz-hint { font-size: 10px; color: var(--muted); }
+
+.tabs { display: flex; gap: 5px; margin-bottom: 8px; }
+.tab,
+.sbtn,
+.icon-btn,
+.outline-btn,
+.primary-btn {
+  font-family: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.tab {
+  flex: 1;
+  min-height: 30px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tab.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 500;
+}
+
+.panel { display: none; }
+.panel.on { display: block; }
+
+.frow,
+.srow { margin-bottom: 10px; }
+
+.frow label,
+.srow-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.frow input[type=text] {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  font: inherit;
+  background: var(--surface);
+}
+
+.frow input[type=text]:focus { border-color: var(--focus); }
+.frow input[type=color] {
+  width: 100%;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.shape-btns { display: flex; gap: 5px; }
+.sbtn {
+  flex: 1;
+  min-height: 28px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.sbtn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.stamp-thumb {
+  min-height: 92px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.stamp-thumb:active { cursor: grabbing; }
+
+.stamp-thumb img {
+  max-width: 84px;
+  max-height: 84px;
+  object-fit: contain;
+}
+
+.no-stamp { color: var(--muted); font-size: 11px; }
+
+.preset-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.preset {
+  position: relative;
+  height: 64px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  overflow: hidden;
+}
+
+.preset:active { cursor: grabbing; }
+.preset.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(200,55,43,0.15);
+}
+
+.preset img {
+  max-width: 54px;
+  max-height: 54px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.preset .x {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(200,55,43,0.88);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.preset-list.editing .preset .x { opacity: 1; pointer-events: auto; }
+.preset-list.editing .preset { outline: 1.5px dashed var(--border-strong); }
+.preset-list.editing .preset.selected { outline-color: var(--accent); }
+
+.preset-edit-btn {
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 8px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.preset-edit-btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.52);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-box {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 300px;
+  max-width: 92vw;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.32);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.modal-title { font-size: 14px; font-weight: 700; }
+.modal-close {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: 5px;
+  line-height: 1;
+}
+.modal-close:hover { background: var(--surface-2); color: var(--text); }
+.crop-hint { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+.crop-area {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-conic-gradient(#e0e3e7 0% 25%, #fff 0% 50%) 0 0 / 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: crosshair;
+}
+#crop-canvas { display: block; max-width: 100%; }
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+.crop-cancel-btn, .crop-confirm-btn {
+  padding: 7px 16px;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  font-size: 12px;
+}
+.crop-cancel-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+.crop-cancel-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.crop-confirm-btn {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.crop-confirm-btn:hover { background: #a92f26; }
+.empty-list { color: var(--muted); font-size: 11px; line-height: 1.6; }
+
+.outline-btn {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 7px;
+}
+
+.outline-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.outline-btn:disabled,
+.primary-btn:disabled,
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+
+.primary-btn {
+  width: 100%;
+  min-height: 38px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.primary-btn:hover:not(:disabled) { background: #a92f26; }
+
+.danger-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bg-opts {
+  display: none;
+  padding: 9px;
+  margin-top: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.bg-opts.visible { display: block; }
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.page-nav span {
+  flex: 1;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stamp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 138px;
+  overflow: auto;
+}
+
+.stamp-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.stamp-row.selected {
+  color: var(--text);
+  border-color: var(--stamp);
+  background: #eef8f3;
+}
+
+.stamp-row img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.viewer {
+  position: relative;
+  min-width: 0;
+  overflow: auto;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.035) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(0,0,0,0.035) 1px, transparent 1px),
+    var(--bg);
+  background-size: 22px 22px;
+}
+
+.viewer.stamp-target {
+  outline: 2px solid var(--focus);
+  outline-offset: -8px;
+}
+
+.empty-state {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.empty-state .ei { font-size: 42px; opacity: 0.45; }
+.empty-state p { font-size: 13px; }
+
+#canvas-wrap {
+  position: relative;
+  display: none;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 5px 24px rgba(21,25,29,0.18);
+}
+
+#pdf-canvas { display: block; }
+
+.placed-stamp,
+.ghost {
+  position: absolute;
+  user-select: none;
+  touch-action: none;
+}
+
+.placed-stamp {
+  cursor: move;
+  border: 1px solid transparent;
+}
+
+.placed-stamp.selected {
+  border-color: var(--stamp);
+  box-shadow: 0 0 0 2px rgba(45,123,86,0.18);
+}
+
+.placed-stamp img,
+.ghost img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.placed-stamp .resize-handle { display: none; }
+.placed-stamp.selected .resize-handle { display: block; }
+
+.ghost {
+  display: none;
+  cursor: move;
+  border: 1px dashed var(--focus);
+  background: rgba(40,120,216,0.06);
+  z-index: 5;
+}
+
+.ghost.visible { display: block; }
+
+.resize-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--focus);
+  cursor: nwse-resize;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+}
+
+.thumb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.page-thumb {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.page-thumb.active {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px rgba(40,120,216,0.16);
+}
+
+.page-thumb canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid #edf0f2;
+}
+
+.page-thumb .num {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.page-thumb.has-stamps::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface-2);
+}
+
+.global-drop {
+  position: fixed;
+  inset: 10px;
+  display: none;
+  place-items: center;
+  border: 2px dashed var(--focus);
+  border-radius: 12px;
+  background: rgba(238,241,243,0.84);
+  color: var(--text);
+  z-index: 800;
+  pointer-events: none;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+body.dragging-file .global-drop { display: grid; }
+
+#snack {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 900;
+  transform: translateX(-50%) translateY(70px);
+  min-width: 170px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #15191d;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 12px;
+  transition: transform 0.25s;
+  pointer-events: none;
+}
+
+#snack.show { transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 230px minmax(280px, 1fr); }
+  .thumb-panel { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">印</div>
+  <h1>PDF 도장 삽입기</h1>
+  <span class="sub">도장 프리셋을 PDF 위로 끌어 놓고 확정하세요</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <section>
+      <div class="sec-label">PDF 파일</div>
+      <div class="drop-zone" id="pdf-zone">
+        <input type="file" accept=".pdf,application/pdf" id="pdf-input">
+        <span class="dz-icon">PDF</span>
+        <span id="pdf-zone-txt">클릭 또는 드래그하여 열기</span>
+        <span class="dz-hint">화면 어디에 놓아도 열립니다</span>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-label">도장 만들기</div>
+      <div class="tabs">
+        <button class="tab on" id="t-upload">이미지</button>
+        <button class="tab" id="t-design">직접 만들기</button>
+      </div>
+
+      <div class="panel on" id="p-upload">
+        <div class="drop-zone" id="stamp-zone">
+          <input type="file" accept="image/*" id="stamp-input">
+          <span class="dz-icon">IMG</span>
+          <span id="stamp-zone-txt">클릭 또는 드래그하여 등록</span>
+          <span class="dz-hint">PNG, JPG, WEBP</span>
+        </div>
+      </div>
+
+      <div class="panel" id="p-design">
+        <div class="frow">
+          <label for="stamp-text">텍스트</label>
+          <input type="text" id="stamp-text" value="승인" maxlength="6">
+        </div>
+        <div class="frow">
+          <label for="stamp-color">색상</label>
+          <input type="color" id="stamp-color" value="#cc2222">
+        </div>
+        <div class="frow">
+          <label>모양</label>
+          <div class="shape-btns">
+            <button class="sbtn on" data-shape="circle">원형</button>
+            <button class="sbtn" data-shape="rect">사각</button>
+            <button class="sbtn" data-shape="seal">전통</button>
+          </div>
+        </div>
+        <button class="outline-btn" id="design-save-btn">프리셋에 등록</button>
+      </div>
+
+      <div class="stamp-thumb" id="stamp-thumb">
+        <span class="no-stamp" id="no-stamp">선택된 도장 없음</span>
+        <img id="stamp-preview" style="display:none" alt="선택된 도장">
+      </div>
+
+      <button class="outline-btn" id="bg-remove-btn" disabled>배경 투명하게 만들기</button>
+      <button class="outline-btn" id="crop-btn" disabled>크롭하기</button>
+      <div class="bg-opts" id="bg-opts">
+        <div class="srow">
+          <div class="srow-label"><span>허용 오차</span><span id="tol-val">30</span></div>
+          <input type="range" id="tol-slider" min="5" max="120" value="30" step="1">
+        </div>
+        <button class="outline-btn" id="bg-apply-btn" style="margin-top:0">적용</button>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+        <div class="sec-label" style="margin-bottom:0">프리셋</div>
+        <button class="preset-edit-btn" id="preset-edit-btn">편집</button>
+      </div>
+      <div class="preset-list" id="preset-list"></div>
+    </section>
+
+    <section>
+      <div class="sec-label">도장 설정</div>
+      <div class="srow">
+        <div class="srow-label"><span>크기</span><span id="size-val">100px</span></div>
+        <input type="range" id="size-slider" min="30" max="400" value="100" step="1">
+      </div>
+      <div class="srow">
+        <div class="srow-label"><span>불투명도</span><span id="op-val">100%</span></div>
+        <input type="range" id="op-slider" min="10" max="100" value="100" step="1">
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-label">페이지</div>
+      <div class="page-nav">
+        <button class="icon-btn" id="prev-btn" disabled>‹</button>
+        <span id="page-info">- / -</span>
+        <button class="icon-btn" id="next-btn" disabled>›</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-label">찍힌 도장</div>
+      <div class="stamp-list" id="stamp-list"></div>
+      <div class="action-row">
+        <button class="outline-btn" id="copy-btn" disabled>복사</button>
+        <button class="outline-btn" id="paste-btn" disabled>붙여넣기</button>
+      </div>
+      <button class="outline-btn danger-btn" id="delete-btn" disabled>선택 도장 삭제</button>
+    </section>
+
+    <button class="primary-btn" id="save-btn" disabled>PDF로 저장</button>
+  </aside>
+
+  <main class="viewer" id="viewer">
+    <div class="empty-state" id="empty-state">
+      <div class="ei">PDF</div>
+      <p>PDF 파일을 열어주세요</p>
+    </div>
+    <div id="canvas-wrap">
+      <canvas id="pdf-canvas"></canvas>
+      <div id="stamp-layer"></div>
+      <div class="ghost" id="ghost">
+        <img id="ghost-img" alt="도장 미리보기">
+        <span class="resize-handle" id="resize-handle"></span>
+      </div>
+    </div>
+  </main>
+
+  <aside class="thumb-panel">
+    <div class="sec-label">페이지 썸네일</div>
+    <div class="thumb-list" id="thumb-list"></div>
+  </aside>
+</div>
+
+<div class="global-drop">PDF는 문서로 열고, 이미지는 도장 프리셋으로 등록합니다</div>
+<div id="snack"></div>
+
+<div id="crop-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">도장 크롭</span>
+      <button class="modal-close" id="crop-modal-close">×</button>
+    </div>
+    <p class="crop-hint">드래그하여 잘라낼 영역을 선택하세요</p>
+    <div class="crop-area">
+      <canvas id="crop-canvas"></canvas>
+    </div>
+    <div class="modal-footer">
+      <button class="crop-cancel-btn" id="crop-cancel-btn">취소</button>
+      <button class="crop-confirm-btn" id="crop-confirm-btn">크롭 적용</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const STORAGE_KEY = 'pdf-stamp-presets-v2';
+
+const els = {
+  pdfCanvas: document.getElementById('pdf-canvas'),
+  canvasWrap: document.getElementById('canvas-wrap'),
+  emptyState: document.getElementById('empty-state'),
+  viewer: document.getElementById('viewer'),
+  stampLayer: document.getElementById('stamp-layer'),
+  ghost: document.getElementById('ghost'),
+  ghostImg: document.getElementById('ghost-img'),
+  resizeHandle: document.getElementById('resize-handle'),
+  stampThumb: document.getElementById('stamp-thumb'),
+  stampPreview: document.getElementById('stamp-preview'),
+  noStamp: document.getElementById('no-stamp'),
+  pageInfo: document.getElementById('page-info'),
+  prevBtn: document.getElementById('prev-btn'),
+  nextBtn: document.getElementById('next-btn'),
+  saveBtn: document.getElementById('save-btn'),
+  deleteBtn: document.getElementById('delete-btn'),
+  copyBtn: document.getElementById('copy-btn'),
+  pasteBtn: document.getElementById('paste-btn'),
+  sizeSlider: document.getElementById('size-slider'),
+  sizeVal: document.getElementById('size-val'),
+  opSlider: document.getElementById('op-slider'),
+  opVal: document.getElementById('op-val'),
+  presetList: document.getElementById('preset-list'),
+  stampList: document.getElementById('stamp-list'),
+  thumbList: document.getElementById('thumb-list'),
+  bgRemoveBtn: document.getElementById('bg-remove-btn'),
+  bgOpts: document.getElementById('bg-opts'),
+  bgApplyBtn: document.getElementById('bg-apply-btn'),
+  tolSlider: document.getElementById('tol-slider'),
+  tolVal: document.getElementById('tol-val'),
+};
+
+const pdfCtx = els.pdfCanvas.getContext('2d');
+
+let pdfDoc = null;
+let pdfBytes = null;
+let pdfFileName = 'stamped.pdf';
+let curPage = 1;
+let totalPages = 0;
+let canvasScale = 1;
+let stampShape = 'circle';
+let currentStampUrl = null;
+let currentOrigUrl = null;
+let selectedPresetId = null;
+let selectedStampId = null;
+let ghost = null;
+let dragMode = null;
+let placedDrag = null;
+let placedResize = null;
+let copiedStamp = null;
+let currentStampAspect = 1;
+let presetEditMode = false;
+let cropSrcImg = null;
+let cropStart = null;
+let cropEnd = null;
+let cropDragging = false;
+let scrollFlipLock = false;
+let presets = loadPresets();
+let stampsByPage = {};
+let pageRenderToken = 0;
+
+init();
+
+function init() {
+  wireTabs();
+  wireDropZones();
+  wireGlobalDrop();
+  wireCurrentStampDrag();
+  wireStampControls();
+  wirePageControls();
+  wireGhost();
+  wirePresetEdit();
+  wireCropModal();
+  renderPresets();
+  renderStampList();
+  updateButtons();
+}
+
+function wireCurrentStampDrag() {
+  els.stampThumb.draggable = true;
+  els.stampThumb.addEventListener('dragstart', e => {
+    if (!currentStampUrl) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData('application/x-pdf-stamp', currentStampUrl);
+    e.dataTransfer.setData('text/plain', 'stamp');
+  });
+}
+
+function wireTabs() {
+  document.getElementById('t-upload').addEventListener('click', () => setTab('upload'));
+  document.getElementById('t-design').addEventListener('click', () => {
+    setTab('design');
+    currentOrigUrl = drawDesign();
+    selectStamp(currentOrigUrl, null);
+  });
+
+  document.querySelectorAll('.sbtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sbtn').forEach(x => x.classList.remove('on'));
+      btn.classList.add('on');
+      stampShape = btn.dataset.shape;
+      currentOrigUrl = drawDesign();
+      selectStamp(currentOrigUrl, null);
+    });
+  });
+
+  document.getElementById('stamp-text').addEventListener('input', () => {
+    currentOrigUrl = drawDesign();
+    selectStamp(currentOrigUrl, null);
+  });
+  document.getElementById('stamp-color').addEventListener('input', () => {
+    currentOrigUrl = drawDesign();
+    selectStamp(currentOrigUrl, null);
+  });
+  document.getElementById('design-save-btn').addEventListener('click', () => {
+    const dataUrl = drawDesign();
+    addPreset(dataUrl);
+  });
+}
+
+function setTab(tab) {
+  ['upload', 'design'].forEach(name => {
+    document.getElementById('t-' + name).classList.toggle('on', name === tab);
+    document.getElementById('p-' + name).classList.toggle('on', name === tab);
+  });
+}
+
+function wireDropZones() {
+  const pdfZone = document.getElementById('pdf-zone');
+  const stampZone = document.getElementById('stamp-zone');
+
+  makeDrop(pdfZone, file => {
+    if (isPdf(file)) loadPdf(file);
+  });
+  makeDrop(stampZone, file => {
+    if (isImage(file)) loadStampFile(file);
+  });
+
+  document.getElementById('pdf-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) loadPdf(file);
+    e.target.value = '';
+  });
+
+  document.getElementById('stamp-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) loadStampFile(file);
+    e.target.value = '';
+  });
+}
+
+function makeDrop(zone, cb) {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) cb(file);
+  });
+}
+
+function wireGlobalDrop() {
+  window.addEventListener('dragover', e => {
+    e.preventDefault();
+    if (Array.from(e.dataTransfer.types).includes('Files')) document.body.classList.add('dragging-file');
+  });
+  window.addEventListener('dragleave', e => {
+    if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+      document.body.classList.remove('dragging-file');
+    }
+  });
+  window.addEventListener('drop', e => {
+    document.body.classList.remove('dragging-file');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    e.preventDefault();
+    if (isPdf(file)) loadPdf(file);
+    else if (isImage(file)) loadStampFile(file);
+    else snack('PDF 또는 이미지 파일만 사용할 수 있습니다.');
+  });
+
+  els.viewer.addEventListener('dragover', e => {
+    if (!pdfDoc) return;
+    const dataUrl = getDraggedStamp(e);
+    if (!dataUrl && !currentStampUrl) return;
+    e.preventDefault();
+    els.viewer.classList.add('stamp-target');
+  });
+  els.viewer.addEventListener('dragleave', () => els.viewer.classList.remove('stamp-target'));
+  els.viewer.addEventListener('drop', e => {
+    const dataUrl = getDraggedStamp(e) || currentStampUrl;
+    if (!pdfDoc || !dataUrl || e.dataTransfer.files.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    els.viewer.classList.remove('stamp-target');
+    const point = eventToCanvasPoint(e);
+    if (!point) return;
+    selectStamp(dataUrl, selectedPresetId);
+    addStampAtCanvasPoint(dataUrl, point.x, point.y);
+  });
+}
+
+function wireStampControls() {
+  els.sizeSlider.addEventListener('input', () => {
+    const size = Number(els.sizeSlider.value);
+    els.sizeVal.textContent = size + 'px';
+    const selected = getSelectedStamp();
+    if (selected) {
+      const aspect = selected.aspectRatio || (selected.width / selected.height);
+      const { w, h } = sizeToWH(size, aspect);
+      selected.width = w / canvasScale;
+      selected.height = h / canvasScale;
+      clampStampToPage(selected);
+      renderPlacedStamps();
+      renderStampList();
+    }
+  });
+
+  els.opSlider.addEventListener('input', () => {
+    const opacity = Number(els.opSlider.value);
+    els.opVal.textContent = opacity + '%';
+    const selected = getSelectedStamp();
+    if (selected) {
+      selected.opacity = opacity / 100;
+      renderPlacedStamps();
+      renderStampList();
+    }
+  });
+
+  els.deleteBtn.addEventListener('click', deleteSelectedStamp);
+  els.copyBtn.addEventListener('click', copySelectedStamp);
+  els.pasteBtn.addEventListener('click', pasteCopiedStamp);
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const key = e.key.toLowerCase();
+    if ((e.metaKey || e.ctrlKey) && key === 'c') {
+      copySelectedStamp();
+      e.preventDefault();
+    } else if ((e.metaKey || e.ctrlKey) && key === 'v') {
+      pasteCopiedStamp();
+      e.preventDefault();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      deleteSelectedStamp();
+    }
+  });
+
+  document.getElementById('crop-btn').addEventListener('click', openCropModal);
+  els.bgRemoveBtn.addEventListener('click', () => els.bgOpts.classList.toggle('visible'));
+  els.tolSlider.addEventListener('input', () => { els.tolVal.textContent = els.tolSlider.value; });
+  els.bgApplyBtn.addEventListener('click', () => {
+    if (!currentOrigUrl) return;
+    els.bgApplyBtn.textContent = '처리 중...';
+    setTimeout(() => {
+      removeBackground(currentOrigUrl, Number(els.tolSlider.value), result => {
+        currentOrigUrl = result;
+        if (selectedPresetId) updatePreset(selectedPresetId, result);
+        selectStamp(result, selectedPresetId);
+        els.bgApplyBtn.textContent = '적용';
+        snack('배경 제거 완료');
+      });
+    }, 10);
+  });
+}
+
+function wirePageControls() {
+  els.prevBtn.addEventListener('click', () => goPage(curPage - 1));
+  els.nextBtn.addEventListener('click', () => goPage(curPage + 1));
+  els.viewer.addEventListener('scroll', () => {
+    if (!pdfDoc || scrollFlipLock) return;
+    const maxY = els.viewer.scrollHeight - els.viewer.clientHeight;
+    if (maxY <= 4) return;
+    if (els.viewer.scrollTop >= maxY - 4 && curPage < totalPages) {
+      flipByScroll(curPage + 1, 'top');
+    } else if (els.viewer.scrollTop <= 4 && curPage > 1) {
+      flipByScroll(curPage - 1, 'bottom');
+    }
+  }, { passive: true });
+}
+
+function wireGhost() {
+  els.canvasWrap.addEventListener('click', e => {
+    if (e.target.closest('.placed-stamp') || e.target.closest('.ghost')) return;
+    selectedStampId = null;
+    renderPlacedStamps();
+    renderStampList();
+    updateButtons();
+  });
+
+  document.addEventListener('pointermove', e => {
+    if (!placedDrag && !placedResize) return;
+    const stamp = getSelectedStamp();
+    if (!stamp) return;
+    if (placedDrag) {
+      const dx = (e.clientX - placedDrag.startX) / canvasScale;
+      const dy = (e.clientY - placedDrag.startY) / canvasScale;
+      stamp.x = placedDrag.x + dx;
+      stamp.y = placedDrag.y + dy;
+    } else if (placedResize) {
+      const dx = (e.clientX - placedResize.startX) / canvasScale;
+      const aspect = placedResize.width / placedResize.height;
+      const next = Math.max(30 / canvasScale, placedResize.width + dx);
+      stamp.width = next;
+      stamp.height = next / aspect;
+    }
+    clampStampToPage(stamp);
+    renderPlacedStamps();
+    if (placedResize) syncSelectionControls();
+  });
+
+  document.addEventListener('pointerup', e => {
+    if (placedDrag && placedDrag.id === e.pointerId) {
+      placedDrag = null;
+      renderStampList();
+      updateButtons();
+    }
+    if (placedResize && placedResize.id === e.pointerId) {
+      placedResize = null;
+      renderStampList();
+      updateButtons();
+    }
+  });
+
+  els.ghost.addEventListener('pointerdown', e => {
+    if (!ghost || e.target === els.resizeHandle) return;
+    dragMode = {
+      type: 'move',
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      x: ghost.x,
+      y: ghost.y
+    };
+    els.ghost.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  els.resizeHandle.addEventListener('pointerdown', e => {
+    if (!ghost) return;
+    dragMode = {
+      type: 'resize',
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      width: ghost.width,
+      height: ghost.height
+    };
+    els.ghost.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  els.ghost.addEventListener('pointermove', e => {
+    if (!dragMode || dragMode.id !== e.pointerId || !ghost) return;
+    const dx = e.clientX - dragMode.startX;
+    const dy = e.clientY - dragMode.startY;
+    if (dragMode.type === 'move') {
+      ghost.x = dragMode.x + dx;
+      ghost.y = dragMode.y + dy;
+    } else {
+      const aspect = dragMode.width / dragMode.height;
+      const next = Math.max(30, Math.min(500, dragMode.width + dx));
+      ghost.width = next;
+      ghost.height = next / aspect;
+      const displaySize = Math.round(Math.max(ghost.width, ghost.height));
+      els.sizeSlider.value = displaySize;
+      els.sizeVal.textContent = displaySize + 'px';
+    }
+    clampGhost();
+    renderGhost();
+  });
+
+  els.ghost.addEventListener('pointerup', endGhostDrag);
+  els.ghost.addEventListener('pointercancel', endGhostDrag);
+}
+
+function endGhostDrag(e) {
+  if (dragMode && dragMode.id === e.pointerId) dragMode = null;
+}
+
+async function loadPdf(file) {
+  try {
+    pdfBytes = await file.arrayBuffer();
+    pdfFileName = stampedFileName(file.name);
+    pdfDoc = await pdfjsLib.getDocument({
+      data: pdfBytes.slice(0),
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/'
+    }).promise;
+    totalPages = pdfDoc.numPages;
+    curPage = 1;
+    stampsByPage = {};
+    selectedStampId = null;
+    ghost = null;
+    els.ghost.classList.remove('visible');
+    await renderPage(curPage);
+    renderThumbs();
+    document.getElementById('pdf-zone').classList.add('filled');
+    document.getElementById('pdf-zone-txt').textContent = file.name;
+    els.emptyState.style.display = 'none';
+    els.canvasWrap.style.display = 'block';
+    snack('PDF를 열었습니다.');
+    updateButtons();
+  } catch (err) {
+    snack('PDF를 열 수 없습니다: ' + err.message);
+  }
+}
+
+async function renderPage(num, scrollPosition) {
+  if (!pdfDoc) return;
+  const token = ++pageRenderToken;
+  const page = await pdfDoc.getPage(num);
+  const maxW = els.viewer.clientWidth - 48;
+  const maxH = Math.max(els.viewer.clientHeight - 48, 420);
+  const base = page.getViewport({ scale: 1 });
+  canvasScale = Math.min(maxW / base.width, maxH / base.height, 2.5);
+  const vp = page.getViewport({ scale: canvasScale });
+  els.pdfCanvas.width = vp.width;
+  els.pdfCanvas.height = vp.height;
+  await page.render({ canvasContext: pdfCtx, viewport: vp }).promise;
+  if (token !== pageRenderToken) return;
+  els.pageInfo.textContent = num + ' / ' + totalPages;
+  els.prevBtn.disabled = num <= 1;
+  els.nextBtn.disabled = num >= totalPages;
+  renderPlacedStamps();
+  renderStampList();
+  updateThumbHighlights();
+  updateButtons();
+  requestAnimationFrame(() => {
+    if (scrollPosition === 'bottom') {
+      els.viewer.scrollTop = els.viewer.scrollHeight;
+    } else {
+      els.viewer.scrollTop = 0;
+    }
+  });
+}
+
+async function goPage(num, scrollPosition) {
+  if (!pdfDoc || num < 1 || num > totalPages || num === curPage) return;
+  curPage = num;
+  selectedStampId = null;
+  ghost = null;
+  els.ghost.classList.remove('visible');
+  await renderPage(curPage, scrollPosition);
+}
+
+async function flipByScroll(num, scrollPosition) {
+  scrollFlipLock = true;
+  await goPage(num, scrollPosition);
+  setTimeout(() => { scrollFlipLock = false; }, 350);
+}
+
+async function renderThumbs() {
+  els.thumbList.innerHTML = '';
+  if (!pdfDoc) return;
+  for (let i = 1; i <= totalPages; i++) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'page-thumb';
+    item.dataset.page = i;
+    item.innerHTML = '<canvas></canvas><div class="num">' + i + '페이지</div>';
+    item.addEventListener('click', () => goPage(i));
+    els.thumbList.appendChild(item);
+    renderThumbCanvas(i, item.querySelector('canvas'));
+  }
+  updateThumbHighlights();
+}
+
+async function renderThumbCanvas(pageNum, canvas) {
+  const page = await pdfDoc.getPage(pageNum);
+  const vp0 = page.getViewport({ scale: 1 });
+  const scale = 128 / vp0.width;
+  const vp = page.getViewport({ scale });
+  canvas.width = vp.width;
+  canvas.height = vp.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+}
+
+function updateThumbHighlights() {
+  document.querySelectorAll('.page-thumb').forEach(item => {
+    const page = Number(item.dataset.page);
+    item.classList.toggle('active', page === curPage);
+    item.classList.toggle('has-stamps', getPageStamps(page).length > 0);
+  });
+}
+
+function loadStampFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    addPreset(ev.target.result);
+    currentOrigUrl = ev.target.result;
+    document.getElementById('stamp-zone').classList.add('filled');
+    document.getElementById('stamp-zone-txt').textContent = file.name;
+    els.bgRemoveBtn.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadPresets() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(x => x && x.dataUrl) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePresets() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+}
+
+function addPreset(dataUrl) {
+  const preset = { id: String(Date.now()) + Math.random().toString(16).slice(2), dataUrl };
+  presets.unshift(preset);
+  savePresets();
+  renderPresets();
+  selectStamp(dataUrl, preset.id);
+  snack('도장 프리셋을 등록했습니다.');
+}
+
+function updatePreset(id, dataUrl) {
+  const item = presets.find(x => x.id === id);
+  if (!item) return;
+  item.dataUrl = dataUrl;
+  savePresets();
+  renderPresets();
+}
+
+function removePreset(id) {
+  presets = presets.filter(x => x.id !== id);
+  if (selectedPresetId === id) selectStamp(null, null);
+  savePresets();
+  renderPresets();
+}
+
+function renderPresets() {
+  els.presetList.innerHTML = '';
+  if (!presets.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-list';
+    empty.textContent = '이미지를 등록하면 여기에 저장됩니다.';
+    els.presetList.appendChild(empty);
+    return;
+  }
+
+  presets.forEach(preset => {
+    const item = document.createElement('div');
+    item.className = 'preset';
+    item.draggable = true;
+    item.classList.toggle('selected', preset.id === selectedPresetId);
+    item.innerHTML = '<img alt="도장 프리셋"><button class="x" type="button" title="삭제">×</button>';
+    item.querySelector('img').src = preset.dataUrl;
+    item.addEventListener('click', () => selectStamp(preset.dataUrl, preset.id));
+    item.addEventListener('dragstart', e => {
+      selectStamp(preset.dataUrl, preset.id);
+      e.dataTransfer.setData('application/x-pdf-stamp', preset.dataUrl);
+      e.dataTransfer.setData('text/plain', 'stamp');
+    });
+    item.querySelector('.x').addEventListener('click', e => {
+      e.stopPropagation();
+      removePreset(preset.id);
+    });
+    els.presetList.appendChild(item);
+  });
+}
+
+function selectStamp(dataUrl, presetId) {
+  currentStampUrl = dataUrl;
+  currentOrigUrl = dataUrl || currentOrigUrl;
+  selectedPresetId = presetId;
+  if (dataUrl) {
+    const img = new Image();
+    img.onload = () => { currentStampAspect = img.naturalWidth / img.naturalHeight || 1; };
+    img.src = dataUrl;
+    els.stampPreview.src = dataUrl;
+    els.stampPreview.style.display = 'block';
+    els.noStamp.style.display = 'none';
+    els.bgRemoveBtn.disabled = false;
+  } else {
+    currentStampAspect = 1;
+    els.stampPreview.removeAttribute('src');
+    els.stampPreview.style.display = 'none';
+    els.noStamp.style.display = 'block';
+    els.bgRemoveBtn.disabled = true;
+    els.bgOpts.classList.remove('visible');
+  }
+  renderPresets();
+  updateButtons();
+}
+
+function drawDesign() {
+  const sc = document.createElement('canvas');
+  sc.width = 220;
+  sc.height = 220;
+  const c = sc.getContext('2d');
+  const color = document.getElementById('stamp-color').value;
+  const text = document.getElementById('stamp-text').value || '도장';
+  c.clearRect(0, 0, sc.width, sc.height);
+  c.strokeStyle = color;
+  c.fillStyle = color;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+
+  if (stampShape === 'circle') {
+    c.lineWidth = 9;
+    c.beginPath();
+    c.arc(110, 110, 96, 0, Math.PI * 2);
+    c.stroke();
+    c.font = 'bold ' + (text.length > 3 ? 42 : 58) + 'px sans-serif';
+    c.fillText(text, 110, 110);
+  } else if (stampShape === 'rect') {
+    c.lineWidth = 9;
+    c.strokeRect(18, 18, 184, 184);
+    c.lineWidth = 3;
+    c.strokeRect(28, 28, 164, 164);
+    c.font = 'bold ' + (text.length > 3 ? 40 : 56) + 'px sans-serif';
+    c.fillText(text, 110, 110);
+  } else {
+    c.lineWidth = 4;
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      c.beginPath();
+      c.moveTo(110 + 82 * Math.cos(a), 110 + 82 * Math.sin(a));
+      c.lineTo(110 + 99 * Math.cos(a), 110 + 99 * Math.sin(a));
+      c.stroke();
+    }
+    c.lineWidth = 5;
+    c.beginPath();
+    c.arc(110, 110, 76, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.arc(110, 110, 65, 0, Math.PI * 2);
+    c.stroke();
+    c.font = 'bold ' + (text.length > 3 ? 38 : 52) + 'px sans-serif';
+    c.fillText(text, 110, 110);
+  }
+  return sc.toDataURL('image/png');
+}
+
+function sizeToWH(size, aspect) {
+  return aspect >= 1 ? { w: size, h: size / aspect } : { w: size * aspect, h: size };
+}
+
+function showGhost(x, y) {
+  if (!currentStampUrl || !pdfDoc) {
+    snack('먼저 도장을 선택해주세요.');
+    return;
+  }
+  const size = Number(els.sizeSlider.value);
+  const { w, h } = sizeToWH(size, currentStampAspect);
+  ghost = {
+    dataUrl: currentStampUrl,
+    x,
+    y,
+    width: w,
+    height: h,
+    opacity: Number(els.opSlider.value) / 100
+  };
+  selectedStampId = null;
+  clampGhost();
+  renderGhost();
+  renderPlacedStamps();
+  updateButtons();
+}
+
+function addStampAtCanvasPoint(dataUrl, canvasX, canvasY) {
+  if (!pdfDoc || !dataUrl) return;
+  const size = Number(els.sizeSlider.value);
+  const { w, h } = sizeToWH(size, currentStampAspect);
+  const stamp = {
+    id: String(Date.now()) + Math.random().toString(16).slice(2),
+    page: curPage,
+    dataUrl,
+    x: (canvasX - w / 2) / canvasScale,
+    y: (canvasY - h / 2) / canvasScale,
+    width: w / canvasScale,
+    height: h / canvasScale,
+    aspectRatio: currentStampAspect,
+    opacity: Number(els.opSlider.value) / 100
+  };
+  clampStampToPage(stamp);
+  getPageStamps(curPage).push(stamp);
+  selectedStampId = stamp.id;
+  renderPlacedStamps();
+  renderStampList();
+  updateThumbHighlights();
+  syncSelectionControls();
+  updateButtons();
+}
+
+function renderGhost() {
+  if (!ghost) {
+    els.ghost.classList.remove('visible');
+    return;
+  }
+  els.ghostImg.src = ghost.dataUrl;
+  els.ghost.style.left = ghost.x + 'px';
+  els.ghost.style.top = ghost.y + 'px';
+  els.ghost.style.width = ghost.width + 'px';
+  els.ghost.style.height = ghost.height + 'px';
+  els.ghost.style.opacity = ghost.opacity;
+  els.ghost.classList.add('visible');
+}
+
+function clampGhost() {
+  if (!ghost) return;
+  ghost.width = Math.min(ghost.width, els.pdfCanvas.width);
+  ghost.height = Math.min(ghost.height, els.pdfCanvas.height);
+  ghost.x = Math.max(0, Math.min(ghost.x, els.pdfCanvas.width - ghost.width));
+  ghost.y = Math.max(0, Math.min(ghost.y, els.pdfCanvas.height - ghost.height));
+}
+
+function commitGhost() {
+  if (!ghost || !pdfDoc) return;
+  const stamp = {
+    id: String(Date.now()) + Math.random().toString(16).slice(2),
+    page: curPage,
+    dataUrl: ghost.dataUrl,
+    x: ghost.x / canvasScale,
+    y: ghost.y / canvasScale,
+    width: ghost.width / canvasScale,
+    height: ghost.height / canvasScale,
+    aspectRatio: ghost.width / ghost.height,
+    opacity: ghost.opacity
+  };
+  getPageStamps(curPage).push(stamp);
+  selectedStampId = stamp.id;
+  ghost = null;
+  els.ghost.classList.remove('visible');
+  renderPlacedStamps();
+  renderStampList();
+  updateThumbHighlights();
+  updateButtons();
+}
+
+function getSelectedStamp() {
+  if (!selectedStampId) return null;
+  return getPageStamps(curPage).find(stamp => stamp.id === selectedStampId) || null;
+}
+
+function clampStampToPage(stamp) {
+  const pageWidth = els.pdfCanvas.width / canvasScale;
+  const pageHeight = els.pdfCanvas.height / canvasScale;
+  stamp.width = Math.min(stamp.width, pageWidth);
+  stamp.height = Math.min(stamp.height, pageHeight);
+  stamp.x = Math.max(0, Math.min(stamp.x, pageWidth - stamp.width));
+  stamp.y = Math.max(0, Math.min(stamp.y, pageHeight - stamp.height));
+}
+
+function syncSelectionControls() {
+  const selected = getSelectedStamp();
+  if (!selected) return;
+  const displaySize = Math.round(Math.max(selected.width, selected.height) * canvasScale);
+  const opacity = Math.round(selected.opacity * 100);
+  els.sizeSlider.value = Math.max(Number(els.sizeSlider.min), Math.min(Number(els.sizeSlider.max), displaySize));
+  els.sizeVal.textContent = Math.round(Number(els.sizeSlider.value)) + 'px';
+  els.opSlider.value = Math.max(Number(els.opSlider.min), Math.min(Number(els.opSlider.max), opacity));
+  els.opVal.textContent = Math.round(Number(els.opSlider.value)) + '%';
+}
+
+function copySelectedStamp() {
+  const selected = getSelectedStamp();
+  if (!selected) return;
+  copiedStamp = {
+    dataUrl: selected.dataUrl,
+    width: selected.width,
+    height: selected.height,
+    aspectRatio: selected.aspectRatio || (selected.width / selected.height),
+    opacity: selected.opacity,
+    x: selected.x,
+    y: selected.y
+  };
+  updateButtons();
+  snack('도장을 복사했습니다.');
+}
+
+function pasteCopiedStamp() {
+  if (!copiedStamp || !pdfDoc) return;
+  const offset = 18 / canvasScale;
+  const stamp = {
+    id: String(Date.now()) + Math.random().toString(16).slice(2),
+    page: curPage,
+    dataUrl: copiedStamp.dataUrl,
+    x: copiedStamp.x + offset,
+    y: copiedStamp.y + offset,
+    width: copiedStamp.width,
+    height: copiedStamp.height,
+    aspectRatio: copiedStamp.aspectRatio || (copiedStamp.width / copiedStamp.height),
+    opacity: copiedStamp.opacity
+  };
+  clampStampToPage(stamp);
+  getPageStamps(curPage).push(stamp);
+  selectedStampId = stamp.id;
+  renderPlacedStamps();
+  renderStampList();
+  updateThumbHighlights();
+  syncSelectionControls();
+  updateButtons();
+}
+
+function getPageStamps(page) {
+  if (!stampsByPage[page]) stampsByPage[page] = [];
+  return stampsByPage[page];
+}
+
+function renderPlacedStamps() {
+  els.stampLayer.innerHTML = '';
+  getPageStamps(curPage).forEach((stamp, index) => {
+    const node = document.createElement('div');
+    node.className = 'placed-stamp';
+    node.classList.toggle('selected', stamp.id === selectedStampId);
+    node.style.left = stamp.x * canvasScale + 'px';
+    node.style.top = stamp.y * canvasScale + 'px';
+    node.style.width = stamp.width * canvasScale + 'px';
+    node.style.height = stamp.height * canvasScale + 'px';
+    node.style.opacity = stamp.opacity;
+    node.style.zIndex = String(2 + index);
+    node.innerHTML = '<img alt="찍힌 도장"><span class="resize-handle"></span>';
+    node.querySelector('img').src = stamp.dataUrl;
+    node.querySelector('.resize-handle').addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      selectedStampId = stamp.id;
+      placedDrag = null;
+      placedResize = {
+        id: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        width: stamp.width,
+        height: stamp.height
+      };
+      node.setPointerCapture(e.pointerId);
+      syncSelectionControls();
+      renderStampList();
+      updateButtons();
+      e.preventDefault();
+    });
+    node.addEventListener('pointerdown', e => {
+      if (e.target.closest('.resize-handle')) return;
+      e.stopPropagation();
+      selectedStampId = stamp.id;
+      syncSelectionControls();
+      placedDrag = {
+        id: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        x: stamp.x,
+        y: stamp.y
+      };
+      node.setPointerCapture(e.pointerId);
+      renderStampList();
+      updateButtons();
+    });
+    node.addEventListener('click', e => {
+      e.stopPropagation();
+      selectedStampId = stamp.id;
+      syncSelectionControls();
+      renderPlacedStamps();
+      renderStampList();
+      updateButtons();
+    });
+    els.stampLayer.appendChild(node);
+  });
+}
+
+function renderStampList() {
+  els.stampList.innerHTML = '';
+  const stamps = getPageStamps(curPage);
+  if (!stamps.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-list';
+    empty.textContent = '이 페이지에 찍힌 도장이 없습니다.';
+    els.stampList.appendChild(empty);
+    return;
+  }
+  stamps.forEach((stamp, index) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'stamp-row';
+    row.classList.toggle('selected', stamp.id === selectedStampId);
+    row.innerHTML = '<img alt=""><span>' + (index + 1) + '번 도장</span>';
+    row.querySelector('img').src = stamp.dataUrl;
+    row.addEventListener('click', () => {
+      selectedStampId = stamp.id;
+      syncSelectionControls();
+      renderPlacedStamps();
+      renderStampList();
+      updateButtons();
+    });
+    els.stampList.appendChild(row);
+  });
+}
+
+function deleteSelectedStamp() {
+  if (!selectedStampId) return;
+  stampsByPage[curPage] = getPageStamps(curPage).filter(stamp => stamp.id !== selectedStampId);
+  selectedStampId = null;
+  renderPlacedStamps();
+  renderStampList();
+  updateThumbHighlights();
+  updateButtons();
+}
+
+els.saveBtn.addEventListener('click', async () => {
+  const totalStamps = Object.values(stampsByPage).reduce((sum, list) => sum + list.length, 0);
+  if (!pdfBytes || !totalStamps) return;
+  els.saveBtn.textContent = '저장 중...';
+  els.saveBtn.disabled = true;
+  try {
+    const { PDFDocument } = PDFLib;
+    const doc = await PDFDocument.load(pdfBytes);
+    const imageCache = new Map();
+
+    for (const [pageKey, stamps] of Object.entries(stampsByPage)) {
+      const pageNum = Number(pageKey);
+      const page = doc.getPages()[pageNum - 1];
+      if (!page || !stamps.length) continue;
+      const { width: pw, height: ph } = page.getSize();
+      const pdfPage = await pdfDoc.getPage(pageNum);
+      const base = pdfPage.getViewport({ scale: 1 });
+      const scaleX = pw / base.width;
+      const scaleY = ph / base.height;
+
+      for (const stamp of stamps) {
+        let embedded = imageCache.get(stamp.dataUrl);
+        if (!embedded) {
+          const isJpeg = stamp.dataUrl.startsWith('data:image/jpeg') || stamp.dataUrl.startsWith('data:image/jpg');
+          const isPng = stamp.dataUrl.startsWith('data:image/png');
+          const embeddableUrl = (isJpeg || isPng) ? stamp.dataUrl : await toPngDataUrl(stamp.dataUrl);
+          const bytes = dataUrlToBytes(embeddableUrl);
+          embedded = isJpeg ? await doc.embedJpg(bytes) : await doc.embedPng(bytes);
+          imageCache.set(stamp.dataUrl, embedded);
+        }
+        const x = stamp.x * scaleX;
+        const y = ph - (stamp.y + stamp.height) * scaleY;
+        const width = stamp.width * scaleX;
+        const height = stamp.height * scaleY;
+        page.drawImage(embedded, { x, y, width, height, opacity: stamp.opacity });
+      }
+    }
+
+    const out = await doc.save();
+    const blob = new Blob([out], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = pdfFileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    snack('PDF 저장 완료');
+  } catch (err) {
+    snack('저장 실패: ' + err.message);
+  } finally {
+    els.saveBtn.textContent = 'PDF로 저장';
+    updateButtons();
+  }
+});
+
+function toPngDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error('이미지를 PNG로 변환할 수 없습니다.'));
+    img.src = dataUrl;
+  });
+}
+
+function dataUrlToBytes(dataUrl) {
+  const base64 = dataUrl.split(',')[1];
+  return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+}
+
+function stampedFileName(name) {
+  const clean = (name || 'document.pdf').trim();
+  return clean.replace(/\.pdf$/i, '') + '_stamped.pdf';
+}
+
+function removeBackground(dataUrl, tolerance, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const id = ctx.getImageData(0, 0, c.width, c.height);
+    const d = id.data;
+    const px = (x, y) => {
+      const i = (y * c.width + x) * 4;
+      return [d[i], d[i + 1], d[i + 2]];
+    };
+    const corners = [px(0, 0), px(c.width - 1, 0), px(0, c.height - 1), px(c.width - 1, c.height - 1)];
+    const bg = [0, 1, 2].map(i => Math.round(corners.reduce((sum, p) => sum + p[i], 0) / corners.length));
+    const visited = new Uint8Array(c.width * c.height);
+    const queue = [];
+    const enqueue = (x, y) => {
+      if (x < 0 || y < 0 || x >= c.width || y >= c.height) return;
+      const idx = y * c.width + x;
+      if (visited[idx]) return;
+      const i = idx * 4;
+      const delta = Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]);
+      if (delta <= tolerance * 3) {
+        visited[idx] = 1;
+        queue.push(x, y);
+      }
+    };
+    for (let x = 0; x < c.width; x++) {
+      enqueue(x, 0);
+      enqueue(x, c.height - 1);
+    }
+    for (let y = 0; y < c.height; y++) {
+      enqueue(0, y);
+      enqueue(c.width - 1, y);
+    }
+    let qi = 0;
+    while (qi < queue.length) {
+      const x = queue[qi++];
+      const y = queue[qi++];
+      d[(y * c.width + x) * 4 + 3] = 0;
+      enqueue(x + 1, y);
+      enqueue(x - 1, y);
+      enqueue(x, y + 1);
+      enqueue(x, y - 1);
+    }
+    ctx.putImageData(id, 0, 0);
+    cb(c.toDataURL('image/png'));
+  };
+  img.src = dataUrl;
+}
+
+function updateButtons() {
+  const totalStamps = Object.values(stampsByPage).reduce((sum, list) => sum + list.length, 0);
+  els.deleteBtn.disabled = !selectedStampId;
+  els.copyBtn.disabled = !selectedStampId;
+  els.pasteBtn.disabled = !copiedStamp || !pdfDoc;
+  els.saveBtn.disabled = !pdfDoc || totalStamps === 0;
+  els.prevBtn.disabled = !pdfDoc || curPage <= 1;
+  els.nextBtn.disabled = !pdfDoc || curPage >= totalPages;
+  els.bgRemoveBtn.disabled = !currentStampUrl;
+  document.getElementById('crop-btn').disabled = !currentStampUrl;
+}
+
+function eventToCanvasPoint(e) {
+  const rect = els.canvasWrap.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  if (x < 0 || y < 0 || x > els.pdfCanvas.width || y > els.pdfCanvas.height) return null;
+  return { x, y };
+}
+
+function getDraggedStamp(e) {
+  return e.dataTransfer.getData('application/x-pdf-stamp');
+}
+
+function isPdf(file) {
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+}
+
+function isImage(file) {
+  return file.type.startsWith('image/');
+}
+
+function wirePresetEdit() {
+  const btn = document.getElementById('preset-edit-btn');
+  btn.addEventListener('click', () => {
+    presetEditMode = !presetEditMode;
+    btn.classList.toggle('on', presetEditMode);
+    btn.textContent = presetEditMode ? '완료' : '편집';
+    els.presetList.classList.toggle('editing', presetEditMode);
+  });
+}
+
+function wireCropModal() {
+  const canvas = document.getElementById('crop-canvas');
+  document.getElementById('crop-modal-close').addEventListener('click', closeCropModal);
+  document.getElementById('crop-cancel-btn').addEventListener('click', closeCropModal);
+  document.getElementById('crop-confirm-btn').addEventListener('click', applyCrop);
+  document.getElementById('crop-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('crop-modal')) closeCropModal();
+  });
+
+  canvas.addEventListener('mousedown', e => {
+    const pt = canvasPoint(canvas, e);
+    cropStart = pt;
+    cropEnd = pt;
+    cropDragging = true;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!cropDragging) return;
+    const pt = canvasPoint(canvas, e);
+    cropEnd = {
+      x: Math.max(0, Math.min(pt.x, canvas.width)),
+      y: Math.max(0, Math.min(pt.y, canvas.height))
+    };
+    drawCropCanvas();
+  });
+  document.addEventListener('mouseup', () => { cropDragging = false; });
+}
+
+function canvasPoint(canvas, e) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width / rect.width;
+  const sy = canvas.height / rect.height;
+  return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
+}
+
+function openCropModal() {
+  if (!currentOrigUrl) return;
+  cropStart = null;
+  cropEnd = null;
+  cropDragging = false;
+  const img = new Image();
+  img.onload = () => {
+    const maxW = Math.min(440, window.innerWidth - 96);
+    const maxH = Math.min(360, window.innerHeight - 200);
+    const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+    const canvas = document.getElementById('crop-canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    cropSrcImg = img;
+    drawCropCanvas();
+  };
+  img.src = currentOrigUrl;
+  document.getElementById('crop-modal').style.display = 'flex';
+}
+
+function closeCropModal() {
+  document.getElementById('crop-modal').style.display = 'none';
+  cropStart = null;
+  cropEnd = null;
+  cropSrcImg = null;
+}
+
+function drawCropCanvas() {
+  const canvas = document.getElementById('crop-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (cropSrcImg) ctx.drawImage(cropSrcImg, 0, 0, canvas.width, canvas.height);
+  if (!cropStart || !cropEnd) return;
+  const x = Math.min(cropStart.x, cropEnd.x);
+  const y = Math.min(cropStart.y, cropEnd.y);
+  const w = Math.abs(cropEnd.x - cropStart.x);
+  const h = Math.abs(cropEnd.y - cropStart.y);
+  if (w < 2 || h < 2) return;
+  ctx.fillStyle = 'rgba(0,0,0,0.48)';
+  ctx.fillRect(0, 0, canvas.width, y);
+  ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h);
+  ctx.fillRect(0, y, x, h);
+  ctx.fillRect(x + w, y, canvas.width - x - w, h);
+  ctx.strokeStyle = 'rgba(40,120,216,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 3]);
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.setLineDash([]);
+}
+
+function applyCrop() {
+  if (!cropStart || !cropEnd || !cropSrcImg) { snack('크롭 영역을 드래그로 선택하세요.'); return; }
+  const canvas = document.getElementById('crop-canvas');
+  const sx = cropSrcImg.naturalWidth / canvas.width;
+  const sy = cropSrcImg.naturalHeight / canvas.height;
+  const x = Math.min(cropStart.x, cropEnd.x) * sx;
+  const y = Math.min(cropStart.y, cropEnd.y) * sy;
+  const w = Math.abs(cropEnd.x - cropStart.x) * sx;
+  const h = Math.abs(cropEnd.y - cropStart.y) * sy;
+  if (w < 8 || h < 8) { snack('크롭 영역이 너무 작습니다.'); return; }
+  const out = document.createElement('canvas');
+  out.width = Math.round(w);
+  out.height = Math.round(h);
+  out.getContext('2d').drawImage(cropSrcImg, x, y, w, h, 0, 0, out.width, out.height);
+  const result = out.toDataURL('image/png');
+  currentOrigUrl = result;
+  if (selectedPresetId) updatePreset(selectedPresetId, result);
+  selectStamp(result, selectedPresetId);
+  closeCropModal();
+  snack('크롭이 적용됐습니다.');
+}
+
+function snack(msg) {
+  const el = document.getElementById('snack');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(snack.timer);
+  snack.timer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+</script>
+</body>
+</html>
