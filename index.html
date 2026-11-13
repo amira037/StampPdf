@@ -1035,6 +1035,8 @@ let selectedPresetId = null;
 let selectedStampId = null;
 let ghost = null;
 let dragMode = null;
+// 앱 안에서 도장을 끄는 중인지. 윈도우 크롬은 <img>를 끌면 파일(Files)로도 실어 보내서 외부 파일 드롭과 구분해야 한다.
+let internalStampDrag = false;
 let placedDrag = null;
 let placedResize = null;
 let copiedStamp = null;
@@ -1073,9 +1075,11 @@ function wireCurrentStampDrag() {
       e.preventDefault();
       return;
     }
+    internalStampDrag = true;
     e.dataTransfer.setData('application/x-pdf-stamp', currentStampUrl);
     e.dataTransfer.setData('text/plain', 'stamp');
   });
+  document.addEventListener('dragend', () => { internalStampDrag = false; });
 }
 
 function wireTabs() {
@@ -1139,7 +1143,7 @@ function wireGlobalDrop() {
 
   window.addEventListener('dragover', e => {
     e.preventDefault();
-    if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+    if (isInternalDrag(e) || !Array.from(e.dataTransfer.types).includes('Files')) return;
     if (!document.body.classList.contains('dragging-file')) {
       document.body.classList.add('dragging-file');
       showDropSuggestion(e.dataTransfer.items);
@@ -1153,6 +1157,11 @@ function wireGlobalDrop() {
     }
   });
   window.addEventListener('drop', e => {
+    if (isInternalDrag(e)) {
+      e.preventDefault();
+      internalStampDrag = false;
+      return;
+    }
     const isFileDrag = document.body.classList.contains('dragging-file');
     // 오버레이를 숨기기 전에 위치를 판정해야 칸 크기가 남아 있다
     const target = isFileDrag && dropTargetAt(e.clientX, e.clientY);
@@ -1178,9 +1187,15 @@ function wireGlobalDrop() {
     stampTarget.classList.toggle('suggested', looksLikeStamp);
   }
 
+  // 사이드바의 문서/도장 칸 위에 놓으면 그 칸을 우선한다. 오버레이 칸 배치(왼쪽=문서)와 사이드바 위치가 겹치기 때문.
   function dropTargetAt(x, y) {
-    const r = stampTarget.getBoundingClientRect();
-    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom ? 'stamp' : 'doc';
+    const inside = el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    if (inside(document.getElementById('stamp-zone'))) return stampTarget.classList.contains('blocked') ? 'doc' : 'stamp';
+    if (inside(document.getElementById('pdf-zone'))) return 'doc';
+    return inside(stampTarget) && !stampTarget.classList.contains('blocked') ? 'stamp' : 'doc';
   }
 
   function endFileDrag() {
@@ -1198,7 +1213,7 @@ function wireGlobalDrop() {
   els.viewer.addEventListener('dragleave', () => els.viewer.classList.remove('stamp-target'));
   els.viewer.addEventListener('drop', e => {
     const dataUrl = getDraggedStamp(e) || currentStampUrl;
-    if (!pdfDoc || !dataUrl || e.dataTransfer.files.length) return;
+    if (!pdfDoc || !dataUrl || (!isInternalDrag(e) && e.dataTransfer.files.length)) return;
     e.preventDefault();
     e.stopPropagation();
     els.viewer.classList.remove('stamp-target');
@@ -1784,8 +1799,10 @@ function renderPresets() {
     item.classList.toggle('selected', preset.id === selectedPresetId);
     item.innerHTML = '<img alt="도장 프리셋"><button class="x" type="button" title="삭제">×</button>';
     item.querySelector('img').src = preset.dataUrl;
+    item.querySelector('img').draggable = false;
     item.addEventListener('click', () => selectStamp(preset.dataUrl, preset.id));
     item.addEventListener('dragstart', e => {
+      internalStampDrag = true;
       selectStamp(preset.dataUrl, preset.id);
       e.dataTransfer.setData('application/x-pdf-stamp', preset.dataUrl);
       e.dataTransfer.setData('text/plain', 'stamp');
@@ -2346,6 +2363,10 @@ function eventToCanvasPoint(e) {
   const y = e.clientY - rect.top;
   if (x < 0 || y < 0 || x > els.pdfCanvas.width || y > els.pdfCanvas.height) return null;
   return { x, y };
+}
+
+function isInternalDrag(e) {
+  return internalStampDrag || Array.from(e.dataTransfer.types).includes('application/x-pdf-stamp');
 }
 
 function getDraggedStamp(e) {
